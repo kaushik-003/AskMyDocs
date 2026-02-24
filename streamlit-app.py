@@ -1,10 +1,9 @@
-"""AskMyDocs — A minimal, Claude-inspired RAG chat interface."""
+"""AskMyDocs — Dark, vibrant RAG chat interface. Auto-loads from data/ folder."""
 
-import os
 import time
+from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
 
 from src.config.config import Config
 from src.document_ingestion.documentprocessor import DocumentProcessor
@@ -16,150 +15,154 @@ load_dotenv()
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="AskMyDocs",
-    page_icon="📄",
+    page_icon="🔮",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-# ── Custom CSS — minimal, warm, Claude-like ──────────────────────────────────
+# ── Custom CSS — dark & vibrant ──────────────────────────────────────────────
 st.markdown(
     """
     <style>
-    /* ── Global ────────────────────────────────────────────── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     html, body, [class*="st-"] {
         font-family: 'Inter', sans-serif;
     }
 
+    /* ── Dark background ─────────────────────────────────── */
     .stApp {
-        background-color: #FAF9F6;
+        background: linear-gradient(160deg, #0a0a0f 0%, #111827 50%, #0f172a 100%);
+        color: #e2e8f0;
     }
 
-    /* ── Header ────────────────────────────────────────────── */
+    /* ── Header ──────────────────────────────────────────── */
     .app-header {
         text-align: center;
-        padding: 2.5rem 0 1rem;
+        padding: 4rem 0 1.5rem;
     }
     .app-header h1 {
-        font-size: 1.85rem;
-        font-weight: 600;
-        color: #1a1a1a;
+        font-size: 2.4rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #a78bfa 0%, #6366f1 40%, #06b6d4 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         margin: 0;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.03em;
     }
     .app-header p {
-        color: #6b6b6b;
+        color: #94a3b8;
         font-size: 0.95rem;
-        margin-top: 0.3rem;
+        margin-top: 0.5rem;
     }
 
-    /* ── Chat messages ─────────────────────────────────────── */
+    /* ── Status badge ────────────────────────────────────── */
+    .doc-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 999px;
+    }
+
+    /* ── Chat messages ───────────────────────────────────── */
     .stChatMessage {
         border-radius: 16px !important;
         padding: 1rem 1.25rem !important;
-        margin-bottom: 0.6rem !important;
+        margin-bottom: 0.75rem !important;
         font-size: 0.95rem !important;
-        line-height: 1.6 !important;
+        line-height: 1.65 !important;
         box-shadow: none !important;
     }
 
     /* user bubble */
     [data-testid="stChatMessageUser"] {
-        background: #EDEDEC !important;
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
+        color: #e2e8f0 !important;
     }
 
     /* assistant bubble */
     [data-testid="stChatMessageAssistant"] {
-        background: #ffffff !important;
-        border: 1px solid #e8e8e8 !important;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
+        border: 1px solid #2d3a5c !important;
+        color: #e2e8f0 !important;
     }
 
-    /* ── Chat input ────────────────────────────────────────── */
+    /* ── Chat input bar ──────────────────────────────────── */
     .stChatInput > div {
         border-radius: 24px !important;
-        border: 1.5px solid #d4d4d4 !important;
-        background: #ffffff !important;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+        border: 1.5px solid #334155 !important;
+        background: #1e293b !important;
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.08) !important;
         padding: 0.15rem 0.5rem !important;
     }
     .stChatInput > div:focus-within {
-        border-color: #D97757 !important;
-        box-shadow: 0 0 0 2px rgba(217,119,87,0.15) !important;
+        border-color: #818cf8 !important;
+        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2) !important;
     }
     .stChatInput textarea {
         font-size: 0.95rem !important;
+        color: #e2e8f0 !important;
+    }
+    .stChatInput textarea::placeholder {
+        color: #64748b !important;
     }
 
-    /* ── Sidebar ───────────────────────────────────────────── */
-    section[data-testid="stSidebar"] {
-        background-color: #F5F4F0;
-        border-right: 1px solid #e8e8e8;
-    }
-    section[data-testid="stSidebar"] .stMarkdown h2 {
-        font-size: 1rem;
-        font-weight: 600;
-        color: #1a1a1a;
-        margin-bottom: 0.5rem;
-    }
-
-    /* ── Buttons ───────────────────────────────────────────── */
+    /* ── Buttons ──────────────────────────────────────────── */
     .stButton > button {
-        border-radius: 10px;
-        font-weight: 500;
+        border-radius: 12px;
+        font-weight: 600;
         font-size: 0.85rem;
-        padding: 0.45rem 1.1rem;
-        transition: all 0.15s ease;
-    }
-    div.stButton > button[kind="primary"],
-    div.stButton > button:first-child {
-        background-color: #D97757 !important;
+        padding: 0.5rem 1.2rem;
+        transition: all 0.2s ease;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
         color: white !important;
         border: none !important;
     }
-    div.stButton > button[kind="primary"]:hover,
-    div.stButton > button:first-child:hover {
-        background-color: #c4613f !important;
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+        box-shadow: 0 0 15px rgba(99, 102, 241, 0.3) !important;
     }
 
-    /* ── Status / spinner ──────────────────────────────────── */
+    /* ── Spinner ──────────────────────────────────────────── */
     .stSpinner > div > div {
-        border-top-color: #D97757 !important;
+        border-top-color: #818cf8 !important;
     }
 
-    /* ── Pill / badge for doc count ────────────────────────── */
-    .doc-badge {
-        display: inline-block;
-        background: #D97757;
-        color: white;
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 0.2rem 0.65rem;
-        border-radius: 999px;
-        margin-left: 0.4rem;
-    }
-
-    /* ── Source expander ────────────────────────────────────── */
+    /* ── Source expander ──────────────────────────────────── */
     details {
-        border: 1px solid #e8e8e8 !important;
+        border: 1px solid #334155 !important;
         border-radius: 12px !important;
-        background: #fafafa !important;
+        background: #1e293b !important;
         padding: 0.15rem 0.5rem !important;
     }
     details summary {
         font-size: 0.82rem !important;
         font-weight: 500 !important;
-        color: #888 !important;
+        color: #94a3b8 !important;
+    }
+    details p, details span {
+        color: #cbd5e1 !important;
     }
 
-    /* hide default Streamlit branding */
+    /* ── Success / Warning / Error ────────────────────────── */
+    .stAlert {
+        border-radius: 12px !important;
+    }
+
+    /* ── Hide Streamlit chrome ────────────────────────────── */
     #MainMenu, footer, header {visibility: hidden;}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ── Session state defaults ───────────────────────────────────────────────────
+
+# ── Session state ────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "graph" not in st.session_state:
@@ -168,140 +171,95 @@ if "docs_loaded" not in st.session_state:
     st.session_state.docs_loaded = False
 if "doc_count" not in st.session_state:
     st.session_state.doc_count = 0
-if "vector_store" not in st.session_state:
-    st.session_state.vector_store = None
 
 
-# ── Sidebar: data ingestion ─────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## 📄 Data Sources")
-
-    source_type = st.radio(
-        "Choose source type",
-        ["URLs", "PDF Files", "PDF Directory", "Text Files"],
-        horizontal=True,
-        label_visibility="collapsed",
+# ── Auto-ingest from data/ folder on first run ──────────────────────────────
+@st.cache_resource(show_spinner=False)
+def load_knowledge_base():
+    """Load PDFs from data/ dir + URLs from data/urls.txt, embed and build graph."""
+    processor = DocumentProcessor(
+        chunk_size=Config.CHUNK_SIZE,
+        chunk_overlap=Config.CHUNK_OVERLAP,
     )
+    raw_docs = []
+    data_dir = Path("data")
 
-    uploaded_files = None
-    url_input = ""
-    dir_path = ""
+    # Load PDFs from data/
+    pdf_files = list(data_dir.glob("*.pdf"))
+    for pdf in pdf_files:
+        raw_docs.extend(processor.load_from_pdf(pdf))
 
-    if source_type == "URLs":
-        url_input = st.text_area(
-            "Enter URLs (one per line)",
-            height=120,
-            placeholder="https://example.com/article\nhttps://...",
-        )
-    elif source_type in ("PDF Files", "Text Files"):
-        allowed = ["pdf"] if source_type == "PDF Files" else ["txt"]
-        uploaded_files = st.file_uploader(
-            f"Upload {source_type.lower()}",
-            type=allowed,
-            accept_multiple_files=True,
-        )
-    elif source_type == "PDF Directory":
-        dir_path = st.text_input("Directory path", placeholder="./data")
+    # Load URLs from data/urls.txt
+    urls_file = data_dir / "urls.txt"
+    if urls_file.exists():
+        urls = [
+            line.strip()
+            for line in urls_file.read_text().splitlines()
+            if line.strip() and line.strip().startswith("http")
+        ]
+        for url in urls:
+            raw_docs.extend(processor.load_from_url(url))
 
-    st.markdown("---")
+    if not raw_docs:
+        return None, 0
 
-    # ── Settings
-    st.markdown("## ⚙️ Settings")
-    chunk_size = st.slider("Chunk size", 200, 2000, Config.CHUNK_SIZE, 50)
-    chunk_overlap = st.slider("Chunk overlap", 0, 200, Config.CHUNK_OVERLAP, 10)
-    model_name = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
-                              index=["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"].index(Config.LLM_MODEL))
+    chunks = processor.split_documents(raw_docs)
 
-    st.markdown("---")
+    vs = VectorStore()
+    vs.create_retriever(chunks)
 
-    # ── Ingest button
-    ingest_btn = st.button("🚀  Ingest Documents", use_container_width=True)
+    llm = Config.get_llm()
+    builder = GraphBuilder(retriever=vs.retriever, llm=llm)
+    builder.build_graph()
 
-    if ingest_btn:
-        processor = DocumentProcessor(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-        raw_docs = []
+    return builder, len(chunks)
 
-        try:
-            with st.spinner("Loading documents…"):
-                if source_type == "URLs" and url_input.strip():
-                    urls = [u.strip() for u in url_input.strip().splitlines() if u.strip()]
-                    for url in urls:
-                        raw_docs.extend(processor.load_from_url(url))
 
-                elif source_type == "PDF Files" and uploaded_files:
-                    import tempfile
-                    for f in uploaded_files:
-                        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-                        tmp.write(f.read())
-                        tmp.close()
-                        raw_docs.extend(processor.load_from_pdf(tmp.name))
-
-                elif source_type == "Text Files" and uploaded_files:
-                    import tempfile
-                    for f in uploaded_files:
-                        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w")
-                        tmp.write(f.read().decode("utf-8"))
-                        tmp.close()
-                        raw_docs.extend(processor.load_from_txt(tmp.name))
-
-                elif source_type == "PDF Directory" and dir_path.strip():
-                    raw_docs.extend(processor.load_from_pdf_dir(dir_path.strip()))
-
-                else:
-                    st.warning("Please provide at least one source.")
-
-            if raw_docs:
-                with st.spinner("Splitting & embedding…"):
-                    chunks = processor.split_documents(raw_docs)
-
-                    vs = VectorStore()
-                    vs.create_retriever(chunks)
-
-                    llm = Config.get_llm(model=model_name)
-                    builder = GraphBuilder(retriever=vs.retriever, llm=llm)
-                    builder.build_graph()
-
-                    st.session_state.graph = builder
-                    st.session_state.docs_loaded = True
-                    st.session_state.doc_count = len(chunks)
-                    st.session_state.vector_store = vs
-
-                st.success(f"Ingested **{len(chunks)}** chunks!")
-
-        except Exception as e:
-            st.error(f"Ingestion failed: {e}")
-
-    # ── Clear chat
-    if st.button("🗑  Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+# ── Load data ────────────────────────────────────────────────────────────────
+if not st.session_state.docs_loaded:
+    with st.spinner("Loading knowledge base from `data/` folder…"):
+        graph, count = load_knowledge_base()
+        if graph:
+            st.session_state.graph = graph
+            st.session_state.doc_count = count
+            st.session_state.docs_loaded = True
 
 
 # ── Main area ────────────────────────────────────────────────────────────────
 
-# Header
+# Header (shown when chat is empty)
 if not st.session_state.messages:
     st.markdown(
         """
         <div class="app-header">
             <h1>AskMyDocs</h1>
-            <p>Upload documents in the sidebar, then ask anything.</p>
+            <p>Your documents are loaded — just ask anything below.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# Status pill
+# Status badge
 if st.session_state.docs_loaded:
     st.markdown(
-        f'<p style="text-align:center; margin-bottom:1rem;">'
+        f'<p style="text-align:center; margin-bottom:1.2rem;">'
         f'<span class="doc-badge">{st.session_state.doc_count} chunks ready</span></p>',
         unsafe_allow_html=True,
     )
+elif not st.session_state.docs_loaded:
+    st.error("No documents found in `data/` folder. Add PDFs or a `urls.txt` and restart.")
+
+# Clear chat button (top-right feel)
+col1, col2, col3 = st.columns([5, 1, 1])
+with col3:
+    if st.button("Clear", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
 # Render chat history
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="🧑‍💻" if msg["role"] == "user" else "📄"):
+    avatar = "🧑‍💻" if msg["role"] == "user" else "🔮"
+    with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg.get("sources"):
             with st.expander("View sources"):
@@ -311,21 +269,23 @@ for msg in st.session_state.messages:
 # Chat input
 if prompt := st.chat_input("Ask a question about your documents…"):
     if not st.session_state.docs_loaded:
-        st.warning("Please ingest documents first using the sidebar.")
+        st.warning("No documents loaded yet.")
     else:
-        # Show user message
+        # User message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user", avatar="🧑‍💻"):
             st.markdown(prompt)
 
-        # Generate response
-        with st.chat_message("assistant", avatar="📄"):
+        # Assistant response
+        with st.chat_message("assistant", avatar="🔮"):
             with st.spinner("Thinking…"):
                 try:
                     result = st.session_state.graph.run(prompt)
 
-                    answer = result.get("answer", "") if isinstance(result, dict) else (
-                        result.answer if hasattr(result, "answer") else str(result)
+                    answer = (
+                        result.get("answer", "")
+                        if isinstance(result, dict)
+                        else getattr(result, "answer", str(result))
                     )
                     sources = []
                     retrieved = (
