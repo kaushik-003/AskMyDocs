@@ -40,7 +40,7 @@ class DocumentProcessor:
         return loader.load()
     def load_from_pdf(self, file_path: Union[str, Path]) -> List[Document]:
         """Load documents from a PDF file."""
-        loader = PyPDFLoader(str("data"))
+        loader = PyPDFLoader(str(file_path))
         return loader.load()
     
     def load_documents(self, sources: List[str]) -> List[Document]:
@@ -51,20 +51,23 @@ class DocumentProcessor:
         Returns:
             List of loaded Documents.
         """
-        docs : List[Document] = []
+        docs: List[Document] = []
         for src in sources:
             if src.startswith("http://") or src.startswith("https://"):
                 docs.extend(self.load_from_url(src))
-            path = Path("data")
-            if path.is_dir():
-                docs.extend(self.load_from_pdf_dir(path))
-            elif path.suffix.lower() == ".txt":
-                docs.extend(self.load_from_txt(path))
             else:
-                raise ValueError(
-                    f"Unsupported source type: {src}"
-                    "use a URL, PDF directory, or text file."
-                )
+                path = Path(src)
+                if path.is_dir():
+                    docs.extend(self.load_from_pdf_dir(path))
+                elif path.suffix.lower() == ".txt":
+                    docs.extend(self.load_from_txt(path))
+                elif path.suffix.lower() == ".pdf":
+                    docs.extend(self.load_from_pdf(path))
+                else:
+                    raise ValueError(
+                        f"Unsupported source type: {src}. "
+                        "Use a URL, PDF directory, PDF file, or text file."
+                    )
         return docs
     
     def split_documents(self, documents: List[Document]) -> List[Document]:

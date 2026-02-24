@@ -4,17 +4,20 @@ from langgraph.graph import StateGraph, END
 from src.state.rag_state import RAGState
 from src.nodes.nodes import RAGNodes
 
+
 class GraphBuilder:
-    """Builds and Manages the RAG workflow graph."""
-    
-    def __init__(self,retriever, llm):
+    """Builds and manages the RAG workflow graph."""
+
+    def __init__(self, retriever, llm):
         """Initializes the GraphBuilder with a retriever and LLM.
-        
+
         Args:
             retriever: The retriever to use for fetching relevant documents.
-            llm: The language model instance
+            llm: The language model instance.
         """
-        self.nodes = RAGNodes()
+        self.retriever = retriever
+        self.llm = llm
+        self.nodes = RAGNodes(retriever=retriever, llm=llm)
         self.graph = None
 
     def build_graph(self):
