@@ -92,7 +92,12 @@ st.markdown(
         color: #e2e8f0 !important;
     }
 
-    /* ── Chat input bar ──────────────────────────────────── */
+    /* ── Chat input bar — shifted slightly left (60:40) ─── */
+    .stChatInput {
+        max-width: 70% !important;
+        margin-left: 8% !important;
+        margin-right: auto !important;
+    }
     .stChatInput > div {
         border-radius: 24px !important;
         border: 1.5px solid #334155 !important;
@@ -249,12 +254,15 @@ if st.session_state.docs_loaded:
 elif not st.session_state.docs_loaded:
     st.error("No documents found in `data/` folder. Add PDFs or a `urls.txt` and restart.")
 
-# Clear chat button (top-right feel)
-col1, col2, col3 = st.columns([5, 1, 1])
-with col3:
-    if st.button("Clear", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+# Clear chat button — small, right-aligned
+st.markdown(
+    '<div style="display:flex; justify-content:flex-end; margin-bottom:0.5rem;">',
+    unsafe_allow_html=True,
+)
+if st.button("🗑 Clear"):
+    st.session_state.messages = []
+    st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 # Render chat history
 for msg in st.session_state.messages:
