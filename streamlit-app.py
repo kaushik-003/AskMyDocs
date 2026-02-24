@@ -94,9 +94,10 @@ st.markdown(
 
     /* ── Chat input bar — shifted slightly left (60:40) ─── */
     .stChatInput {
-        max-width: 70% !important;
-        margin-left: 8% !important;
-        margin-right: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
     }
     .stChatInput > div {
         border-radius: 24px !important;
@@ -254,16 +255,6 @@ if st.session_state.docs_loaded:
 elif not st.session_state.docs_loaded:
     st.error("No documents found in `data/` folder. Add PDFs or a `urls.txt` and restart.")
 
-# Clear chat button — small, right-aligned
-st.markdown(
-    '<div style="display:flex; justify-content:flex-end; margin-bottom:0.5rem;">',
-    unsafe_allow_html=True,
-)
-if st.button("🗑 Clear"):
-    st.session_state.messages = []
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
 # Render chat history
 for msg in st.session_state.messages:
     avatar = "🧑‍💻" if msg["role"] == "user" else "🔮"
@@ -274,8 +265,16 @@ for msg in st.session_state.messages:
                 for i, src in enumerate(msg["sources"], 1):
                     st.caption(f"**[{i}]** {src}")
 
-# Chat input
-if prompt := st.chat_input("Ask a question about your documents…"):
+# Chat input with Clear button
+col_input, col_clear = st.columns([8, 1])
+with col_input:
+    prompt = st.chat_input("Ask a question about your documents…")
+with col_clear:
+    if st.button("🗑"):
+        st.session_state.messages = []
+        st.rerun()
+
+if prompt:
     if not st.session_state.docs_loaded:
         st.warning("No documents loaded yet.")
     else:
